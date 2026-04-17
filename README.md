@@ -14,8 +14,8 @@ A fully self-hosted, real-time IoT data platform. Ingests streaming sensor data,
 │  (services/)           (infra/)     (pipeline/)                 │
 │                                          │                      │
 │                              ┌───────────▼───────────┐          │
-│                              │   MinIO + Iceberg      │         │
-│                              │  Bronze / Silver / Gold│         │
+│                              │  MinIO + Iceberg      │          │
+│                              │ Bronze / Silver / Gold│          │
 │                              └───────────┬───────────┘          │
 │                                          │                      │
 │                              Metabase Dashboard                 │
@@ -142,7 +142,8 @@ Partitioning: `year=YYYY/month=MM/day=DD/hour=HH`
 
 1. **Clone and enter the project**
    ```bash
-   git clone <repo> && cd iotstream-local
+   git clone git@github.com:rohitagarwal-sp18/iotstream-local.git
+   cd iotstream-local
    ```
 
 2. **Start the infrastructure**

@@ -1,0 +1,46 @@
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: iotstream-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    env_file:
+    - ${ENV_FILE_PATH:-.env}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+    networks:
+      - iotstream-network
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: iotstream-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+        mc mb --ignore-existing local/iotstream-warehouse;
+        mc mb --ignore-existing local/iotstream-checkpoints;
+        echo 'MinIO buckets ready';
+      "
+    networks:
+      - iotstream-network
+
+volumes:
+  minio-data:
+
+networks:
+  iotstream-network:
+    external: true
