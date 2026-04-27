@@ -14,8 +14,8 @@ A fully self-hosted, real-time IoT data platform. Ingests streaming sensor data,
 │  (services/)           (infra/)     (pipeline/)                 │
 │                                          │                      │
 │                              ┌───────────▼───────────┐          │
-│                              │   MinIO + Iceberg      │         │
-│                              │  Bronze / Silver / Gold│         │
+│                              │  MinIO + Iceberg      │          │
+│                              │ Bronze / Silver / Gold│          │
 │                              └───────────┬───────────┘          │
 │                                          │                      │
 │                              Metabase Dashboard                 │
@@ -54,6 +54,11 @@ A fully self-hosted, real-time IoT data platform. Ingests streaming sensor data,
 ```
 iotstream-local/
 │
+├── pyproject.toml                # uv project metadata
+├── uv.lock                       # Locked Python dependencies
+├── .python-version               # Local Python version pin
+├── .env.example                  # Example local environment variables
+│
 ├── infra/                         # Infrastructure-as-code (Docker Compose per service)
 │   ├── kafka/
 │   ├── spark/
@@ -63,10 +68,10 @@ iotstream-local/
 │   └── docker-compose.yml         # Full stack — starts everything
 │
 ├── services/
-│   └── sensor-simulator/          # Standalone producer service (separate deployable)
-│       ├── src/
-│       ├── tests/
-│       └── Dockerfile
+│   └── sensor-simulator/          # Standalone producer service
+│       ├── simulator.py
+│       ├── requirements.txt
+│       └── tests/
 │
 ├── pipeline/                      # Data pipeline — organized by medallion layer, NOT by tool
 │   ├── ingestion/                 # Bronze: Kafka → raw Iceberg tables
@@ -89,7 +94,8 @@ iotstream-local/
 ├── orchestration/                 # Airflow
 │   ├── dags/                      # DAG definitions
 │   ├── plugins/                   # Custom operators/hooks
-│   └── configs/                   # Airflow connections, variables
+│   ├── config/                    # Airflow configs
+│   └── logs/                      # Airflow runtime logs
 │
 ├── visualization/                 # Metabase
 │   ├── dashboards/                # Exported dashboard JSON
@@ -101,13 +107,9 @@ iotstream-local/
 │   └── minio/                     # Bucket policies
 │
 ├── scripts/                       # Developer tooling
-│   ├── setup.sh                   # First-time setup
-│   ├── teardown.sh                # Destroy all services + volumes
-│   └── health-check.sh            # Verify all services are alive
+│   └── .gitkeep
 │
 └── docs/
-    ├── architecture.md            # System design deep-dive
-    └── local-setup.md             # How to operate this system
 ```
 
 
@@ -142,7 +144,8 @@ Partitioning: `year=YYYY/month=MM/day=DD/hour=HH`
 
 1. **Clone and enter the project**
    ```bash
-   git clone <repo> && cd iotstream-local
+   git clone git@github.com:rohitagarwal-sp18/iotstream-local.git
+   cd iotstream-local
    ```
 
 2. **Start the infrastructure**

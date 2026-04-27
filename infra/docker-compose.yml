@@ -1,0 +1,11 @@
+include:
+  - path: ./kafka/docker-compose.yml
+  - path: ./minio/docker-compose.yml
+  - path: ./spark/docker-compose.yml
+  - path: ./metabase/docker-compose.yml
+  - path: ./airflow/docker-compose.yml
+
+networks:
+  iotstream-network:
+    driver: bridge
+    name: iotstream-network

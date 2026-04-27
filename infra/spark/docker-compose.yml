@@ -1,0 +1,58 @@
+services:
+  spark-master:
+    image: apache/spark:4.0.2-scala2.13-java17-python3-ubuntu
+    container_name: iotstream-spark-master
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.master.Master
+      - --host
+      - spark-master
+      - --port
+      - "7077"
+      - --webui-port
+      - "8081"
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "7077:7077"
+      - "4040:4040"
+      - "8081:8081"
+    volumes:
+      - ../../pipeline:/opt/spark/pipeline
+      - ../../config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - spark-ivy-cache:/opt/spark/.ivy2
+    networks:
+      - iotstream-network
+
+  spark-worker:
+    image: apache/spark:4.0.2-scala2.13-java17-python3-ubuntu
+    container_name: iotstream-spark-worker
+    command:
+      - /opt/spark/bin/spark-class
+      - org.apache.spark.deploy.worker.Worker
+      - spark://spark-master:7077
+      - --webui-port
+      - "8082"
+      - --cores
+      - "2"
+      - --memory
+      - 2G
+    environment:
+      SPARK_NO_DAEMONIZE: "true"
+    ports:
+      - "8082:8082"
+    depends_on:
+      - spark-master
+    volumes:
+      - ../../pipeline:/opt/spark/pipeline
+      - ../../config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - spark-ivy-cache:/opt/spark/.ivy2
+    networks:
+      - iotstream-network
+
+volumes:
+  spark-ivy-cache:
+
+networks:
+  iotstream-network:
+    external: true

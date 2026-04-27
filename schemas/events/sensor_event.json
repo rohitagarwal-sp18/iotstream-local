@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SensorEvent",
+  "description": "IoT sensor reading published to Kafka topic iot.sensors.raw",
+  "type": "object",
+  "required": [
+    "sensor_id",
+    "timestamp",
+    "temperature",
+    "humidity",
+    "pressure",
+    "ph",
+    "location",
+    "status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "sensor_id": {
+      "type": "string",
+      "description": "Unique identifier for the sensor"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp of the reading"
+    },
+    "temperature": {
+      "type": "number",
+      "description": "Temperature reading in degrees Celsius"
+    },
+    "humidity": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Relative humidity percentage (0–100)"
+    },
+    "pressure": {
+      "type": "number",
+      "minimum": 800,
+      "maximum": 1100,
+      "description": "Atmospheric pressure in hPa (800–1100)"
+    },
+    "ph": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 14,
+      "description": "pH level (0–14)"
+    },
+    "location": {
+      "type": "string",
+      "description": "Physical location identifier for the sensor"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "degraded", "offline"],
+      "description": "Operational status of the sensor"
+    }
+  }
+}
