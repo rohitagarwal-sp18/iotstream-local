@@ -28,9 +28,36 @@ DEAD_LETTER_TOPIC = "iot.sensors.dead-letter"
 KAFKA_BOOTSTRAP = "kafka:9092"
 CHECKPOINT_LOCATION = "s3a://iotstream-checkpoints/silver/"
 
+
+def ensure_silver_table(spark: SparkSession) -> None:
+    spark.sql(
+        """
+        CREATE TABLE IF NOT EXISTS iotstream.silver.sensor_clean (
+            sensor_id     STRING    NOT NULL,
+            timestamp     TIMESTAMP NOT NULL,
+            temperature   DOUBLE,
+            humidity      DOUBLE,
+            pressure      DOUBLE,
+            ph            DOUBLE,
+            location      STRING,
+            status        STRING,
+            _processed_at TIMESTAMP NOT NULL,
+            _dedup_key    STRING    NOT NULL
+        )
+        USING iceberg
+        PARTITIONED BY (days(timestamp))
+        TBLPROPERTIES (
+            'write.format.default' = 'parquet',
+            'write.parquet.compression-codec' = 'snappy'
+        )
+        """
+    )
+
+
 # ---------------------------------------------------------------------------
 # Pure-Python validation (used in unit tests — no Spark dependency)
 # ---------------------------------------------------------------------------
+
 
 def is_valid(row: dict) -> bool:
     """Return True if the row passes all data quality checks."""
@@ -50,33 +77,33 @@ def is_valid(row: dict) -> bool:
     return True
 
 
-# ---------------------------------------------------------------------------
-# Spark column expression for the same checks (used in foreachBatch)
-# ---------------------------------------------------------------------------
-
-_VALID_EXPR = (
-    F.col("sensor_id").isNotNull()
-    & F.col("timestamp").isNotNull()
-    & F.col("humidity").isNotNull()
-    & (F.col("humidity") >= 0)
-    & (F.col("humidity") <= 100)
-    & F.col("pressure").isNotNull()
-    & (F.col("pressure") >= 800)
-    & (F.col("pressure") <= 1100)
-    & F.col("ph").isNotNull()
-    & (F.col("ph") >= 0)
-    & (F.col("ph") <= 14)
-)
+def _valid_expr() -> F.Column:
+    """Spark expression for the same validation checks used in is_valid."""
+    return (
+        F.col("sensor_id").isNotNull()
+        & F.col("timestamp").isNotNull()
+        & F.col("humidity").isNotNull()
+        & (F.col("humidity") >= 0)
+        & (F.col("humidity") <= 100)
+        & F.col("pressure").isNotNull()
+        & (F.col("pressure") >= 800)
+        & (F.col("pressure") <= 1100)
+        & F.col("ph").isNotNull()
+        & (F.col("ph") >= 0)
+        & (F.col("ph") <= 14)
+    )
 
 
 # ---------------------------------------------------------------------------
 # Batch processing logic
 # ---------------------------------------------------------------------------
 
+
 def process_batch(batch_df: DataFrame, batch_id: int) -> None:
     """foreachBatch handler: route valid records to silver, invalid to dead-letter."""
-    valid_df = batch_df.filter(_VALID_EXPR)
-    invalid_df = batch_df.filter(~_VALID_EXPR)
+    valid_expr = _valid_expr()
+    valid_df = batch_df.filter(valid_expr)
+    invalid_df = batch_df.filter(~valid_expr)
 
     # Write valid records to silver table
     if not valid_df.isEmpty():
@@ -100,13 +127,21 @@ def process_batch(batch_df: DataFrame, batch_id: int) -> None:
                 "_dedup_key",
             )
         )
-        silver_df.writeTo(SILVER_TABLE).append()
+        spark = batch_df.sparkSession
+        if spark.catalog.tableExists(SILVER_TABLE):
+            existing_keys_df = (
+                spark.table(SILVER_TABLE).select("_dedup_key").dropDuplicates()
+            )
+            silver_df = silver_df.join(
+                existing_keys_df, on="_dedup_key", how="left_anti"
+            )
+
+        if not silver_df.isEmpty():
+            silver_df.writeTo(SILVER_TABLE).append()
 
     # Send invalid records to dead-letter topic as JSON
     if not invalid_df.isEmpty():
-        dead_letter_df = invalid_df.select(
-            F.to_json(F.struct("*")).alias("value")
-        )
+        dead_letter_df = invalid_df.select(F.to_json(F.struct("*")).alias("value"))
         (
             dead_letter_df.write.format("kafka")
             .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
@@ -116,16 +151,12 @@ def process_batch(batch_df: DataFrame, batch_id: int) -> None:
 
 
 def main() -> None:
-    spark = (
-        SparkSession.builder.appName("iotstream-silver-processing")
-        .getOrCreate()
-    )
+    spark = SparkSession.builder.appName("iotstream-silver-processing").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
+    ensure_silver_table(spark)
 
     bronze_stream = (
-        spark.readStream.format("json")
-        .schema(BRONZE_SCHEMA)
-        .load(BRONZE_PATH)
+        spark.readStream.format("json").schema(BRONZE_SCHEMA).load(BRONZE_PATH)
     )
 
     query = (
