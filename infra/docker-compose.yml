@@ -5,6 +5,22 @@ include:
   - path: ./metabase/docker-compose.yml
   - path: ./airflow/docker-compose.yml
 
+services:
+  bronze-ingestion:
+    image: apache/spark:4.0.2-scala2.13-java17-python3-ubuntu
+    container_name: iotstream-bronze-job
+    command: /opt/spark/bin/spark-submit --master spark://spark-master:7077 /opt/spark/pipeline/ingestion/jobs/bronze_streaming.py
+    volumes:
+      - ../pipeline:/opt/spark/pipeline:ro
+      - ../config/spark/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro
+      - spark-ivy-cache:/opt/spark/.ivy2
+    networks:
+      - iotstream-network
+    restart: on-failure:5
+    depends_on:
+      - spark-master
+      - kafka
+
 networks:
   iotstream-network:
     driver: bridge

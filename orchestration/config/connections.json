@@ -1,0 +1,13 @@
+[
+  {
+    "conn_id": "spark_default",
+    "conn_type": "spark",
+    "description": "Spark standalone cluster — reference connection. The iotstream_pipeline DAG uses BashOperator with docker exec rather than the Spark provider, so this connection is not actively used by the DAG but documents where the cluster lives.",
+    "host": "spark-master",
+    "port": 7077,
+    "schema": null,
+    "login": null,
+    "password": null,
+    "extra": null
+  }
+]
