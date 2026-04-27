@@ -1,35 +1,31 @@
-"""
-Silver and Gold micro-batch pipeline.
-
-Bronze ingestion runs as a standalone container (bronze-ingestion service in
-infra/docker-compose.yml). Prerequisites: Airflow worker needs Docker CLI —
-see infra/airflow/Dockerfile and docker-compose.override.yml.
-"""
-
 from datetime import datetime
 
-from airflow.decorators import dag
-from airflow.operators.bash import BashOperator
+from airflow.providers.standard.operators.bash import BashOperator
+from airflow.sdk import dag
+from core.constants import PIPELINE_BASE, SPARK_CONTAINER, SPARK_SUBMIT
 
-SPARK_SUBMIT = "/opt/spark/bin/spark-submit --master spark://spark-master:7077"
-SPARK_CONTAINER = "iotstream-spark-master"
-PIPELINE_BASE = "/opt/spark/pipeline"
-
-DEFAULT_ARGS = {
-    "retries": 2,
+DAG_ARGS = {
+    "dag_id": "iotstream_pipeline",
+    "schedule": "*/5 * * * *",
+    "start_date": datetime(2026, 1, 1),
+    "catchup": False,
+    "max_active_runs": 1,
 }
 
 
 @dag(
-    dag_id="iotstream_pipeline",
-    schedule="*/5 * * * *",
-    start_date=datetime(2025, 1, 1),
-    catchup=False,
-    max_active_runs=1,
-    default_args=DEFAULT_ARGS,
-    tags=["iotstream", "silver", "gold"],
+    **DAG_ARGS,
 )
 def iotstream_pipeline():
+    bronze_job = BashOperator(
+        task_id="bronze_job",
+        bash_command=(
+            f"docker exec {SPARK_CONTAINER} "
+            f"{SPARK_SUBMIT} "
+            f"{PIPELINE_BASE}/ingestion/jobs/bronze_streaming.py"
+        ),
+    )
+
     silver_job = BashOperator(
         task_id="silver_job",
         bash_command=(
@@ -48,7 +44,7 @@ def iotstream_pipeline():
         ),
     )
 
-    silver_job >> gold_job
+    bronze_job >> silver_job >> gold_job
 
 
 iotstream_pipeline()

@@ -16,8 +16,9 @@ echo "Opening IoTStream Local UIs..."
 open_url "http://localhost:3000"   # Metabase
 open_url "http://localhost:8080"   # Airflow
 open_url "http://localhost:8081"   # Spark Master UI
+open_url "http://localhost:4040"   # Spark Job UI
 open_url "http://localhost:8082"   # Spark Worker UI
 open_url "http://localhost:9001"   # MinIO Console
 open_url "http://localhost:9090"   # Kafka UI
 
-echo "Done — 6 tabs opened."
+echo "Done — 7 tabs opened."

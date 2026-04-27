@@ -28,17 +28,14 @@ EVENT_SCHEMA = StructType(
 
 
 def main() -> None:
-    spark = (
-        SparkSession.builder.appName("iotstream-bronze-ingestion")
-        .getOrCreate()
-    )
+    spark = SparkSession.builder.appName("iotstream-bronze-ingestion").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
 
     raw_stream = (
         spark.readStream.format("kafka")
         .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
         .option("subscribe", KAFKA_TOPIC)
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
         .option("failOnDataLoss", "false")
         .load()
     )
@@ -49,8 +46,7 @@ def main() -> None:
     ).select("data.*", "_ingested_at")
 
     query = (
-        parsed.writeStream
-        .format("json")
+        parsed.writeStream.format("json")
         .outputMode("append")
         .option("path", BRONZE_PATH)
         .option("checkpointLocation", CHECKPOINT_LOCATION)
