@@ -1,11 +1,11 @@
 """
 Gold aggregation job.
 
-Reads from the Iceberg silver table, applies a 1-minute tumbling window
-aggregation per sensor + location, and writes results to the gold table.
+Reads the current Iceberg silver snapshot, applies a 1-minute tumbling window
+aggregation per sensor + location, and upserts results into the gold table.
 
-Uses trigger(availableNow=True) so the job processes all available silver
-data and terminates — suitable for Airflow scheduling.
+This is intentionally batch-style so each Airflow run materializes the current
+state instead of waiting for a streaming watermark to close windows.
 """
 
 from pyspark.sql import SparkSession
@@ -13,27 +13,48 @@ from pyspark.sql import functions as F
 
 SILVER_TABLE = "iotstream.silver.sensor_clean"
 GOLD_TABLE = "iotstream.gold.sensor_metrics_1min"
-CHECKPOINT_LOCATION = "s3a://iotstream-checkpoints/gold/"
-
 WINDOW_DURATION = "1 minute"
-WATERMARK_DELAY = "5 minutes"
+
+
+def ensure_gold_table(spark: SparkSession) -> None:
+    spark.sql(
+        """
+        CREATE TABLE IF NOT EXISTS iotstream.gold.sensor_metrics_1min (
+            window_start      TIMESTAMP NOT NULL,
+            window_end        TIMESTAMP NOT NULL,
+            sensor_id         STRING    NOT NULL,
+            location          STRING,
+            avg_temperature   DOUBLE,
+            min_temperature   DOUBLE,
+            max_temperature   DOUBLE,
+            avg_humidity      DOUBLE,
+            avg_pressure      DOUBLE,
+            avg_ph            DOUBLE,
+            event_count       BIGINT,
+            active_count      BIGINT,
+            degraded_count    BIGINT,
+            offline_count     BIGINT,
+            _processed_at     TIMESTAMP NOT NULL
+        )
+        USING iceberg
+        PARTITIONED BY (days(window_start))
+        TBLPROPERTIES (
+            'write.format.default' = 'parquet',
+            'write.parquet.compression-codec' = 'snappy'
+        )
+        """
+    )
 
 
 def main() -> None:
-    spark = (
-        SparkSession.builder.appName("iotstream-gold-aggregation")
-        .getOrCreate()
-    )
+    spark = SparkSession.builder.appName("iotstream-gold-aggregation").getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
+    ensure_gold_table(spark)
 
-    silver_stream = (
-        spark.readStream.format("iceberg")
-        .load(SILVER_TABLE)
-        .withWatermark("timestamp", WATERMARK_DELAY)
-    )
+    silver_df = spark.read.format("iceberg").load(SILVER_TABLE)
 
     aggregated = (
-        silver_stream.groupBy(
+        silver_df.groupBy(
             F.window("timestamp", WINDOW_DURATION),
             F.col("sensor_id"),
             F.col("location"),
@@ -75,15 +96,18 @@ def main() -> None:
         )
     )
 
-    query = (
-        aggregated.writeStream.format("iceberg")
-        .outputMode("append")
-        .option("checkpointLocation", CHECKPOINT_LOCATION)
-        .trigger(availableNow=True)
-        .toTable(GOLD_TABLE)
+    aggregated.createOrReplaceTempView("gold_batch")
+    spark.sql(
+        f"""
+        MERGE INTO {GOLD_TABLE} AS target
+        USING gold_batch AS source
+        ON target.window_start = source.window_start
+           AND target.sensor_id = source.sensor_id
+           AND COALESCE(target.location, '') = COALESCE(source.location, '')
+        WHEN MATCHED THEN UPDATE SET *
+        WHEN NOT MATCHED THEN INSERT *
+        """
     )
-
-    query.awaitTermination()
 
 
 if __name__ == "__main__":

@@ -26,7 +26,7 @@ from confluent_kafka import Producer
 BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:29092")
 TOPIC = os.getenv("KAFKA_TOPIC", "iot.sensors.raw")
 NUM_SENSORS = int(os.getenv("NUM_SENSORS", "10"))
-EVENTS_PER_SECOND = float(os.getenv("EVENTS_PER_SECOND", "10"))
+EVENTS_PER_SECOND = float(os.getenv("EVENTS_PER_SECOND", "2"))
 
 LOCATIONS = ["warehouse-A", "warehouse-B", "field-north", "field-south", "rooftop"]
 

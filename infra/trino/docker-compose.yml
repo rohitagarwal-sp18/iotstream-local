@@ -1,0 +1,48 @@
+services:
+  iceberg-rest:
+    image: tabulario/iceberg-rest:latest
+    container_name: iotstream-iceberg-rest
+    user: "0"
+    ports:
+      - "8181:8181"
+    environment:
+      - CATALOG_CATALOG__IMPL=org.apache.iceberg.jdbc.JdbcCatalog
+      - CATALOG_URI=jdbc:sqlite:/catalog/iceberg.db
+      - CATALOG_JDBC_USER=iceberg
+      - CATALOG_JDBC_PASSWORD=iceberg
+      - CATALOG_WAREHOUSE=s3://iotstream-warehouse/
+      - CATALOG_IO__IMPL=org.apache.iceberg.aws.s3.S3FileIO
+      - CATALOG_S3_ENDPOINT=http://minio:9000
+      - CATALOG_S3_PATH__STYLE__ACCESS=true
+      - AWS_ACCESS_KEY_ID=${MINIO_ROOT_USER:-minioadmin}
+      - AWS_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD:-minioadmin}
+      - AWS_REGION=us-east-1
+    volumes:
+      - iceberg-catalog:/catalog
+    depends_on:
+      minio:
+        condition: service_healthy
+    networks:
+      - iotstream-network
+
+  trino:
+    image: trinodb/trino:458
+    container_name: iotstream-trino
+    ports:
+      - "8088:8080"
+    volumes:
+      - ../../config/trino:/etc/trino:ro
+    depends_on:
+      minio:
+        condition: service_healthy
+      iceberg-rest:
+        condition: service_started
+    networks:
+      - iotstream-network
+
+volumes:
+  iceberg-catalog:
+
+networks:
+  iotstream-network:
+    external: true
